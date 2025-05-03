@@ -66,7 +66,7 @@ def extract_char_ngrams(input_list, input_dict, n):
 def sort_dict_by_value_and_return_n_most(input_dict, n=300):
     sorted_dict = OrderedDict(sorted(input_dict.items(), key=lambda item: item[1], reverse=True))
     return list(sorted_dict.keys())[:n]
-            
+
 
 class Profile:
     def __init__(self, data: dict, ngram_len, count):
@@ -95,7 +95,12 @@ class Profile:
            diff += abs(v - greater[k]) if k in greater else 1
         
         diff /= len(lesser)
-        return diff              
+        return diff     
+    
+    def load_data(self, profile_data: dict):
+        self.data = profile_data["data"]
+        self.ngram_len = profile_data["ngram_len"]
+        self.count = profile_data["count"]         
         
 
 class ProfileConstructor:
@@ -104,6 +109,12 @@ class ProfileConstructor:
         self.extractor_f = extractor_f
         self.preprocess_f = preprocess_f
         self.n = ngram_len
+        
+    def load_data(self, profile_dict: dict):
+        self.ngrams = profile_dict.get("data", {})
+        self.ngram_len = profile_dict.get("ngram_len")
+        self.count = profile_dict.get("count", 0)
+
         
     def add_sequence(self, sequence):
         if self.preprocess_f is not None:
@@ -132,6 +143,34 @@ class ProfileConstructor:
         output = {k: v / rank for k, v in output.items()}
         return Profile(output, self.n, ngram_count)
         
+        
+def compare_and_return_class(models_profile_list, test_profile):
+    res = []
+    for model_profile in models_profile_list:
+        diff = 0.0
+        count = 0
+        for k,v in model_profile.items():
+            diff += v.compare_to(test_profile[k])
+            count += 1
+        res.append(diff/count)
+    for it in res:
+        print(it)
+
+
+def load_profiles_from_file(file_path: str) -> dict[str, ProfileConstructor]:
+    with open(file_path, "rb") as f:
+        data = json.load(f)
+
+    profiles = []
+
+    for profile_data in data:
+        profiles_tmp = {}
+        for key, value in profile_data.items():
+            profile = Profile({}, value["ngram_len"], value["count"])
+            profile.load_data(value)
+            profiles_tmp[key] = profile
+        profiles.append(profiles_tmp)
+    return profiles
     
 def read_jsonl(jsonl_file, output_jsonl, number_of_ngrams, max_n_grams, should_preprocess):  
     char_preprocessor = make_preprocess_f(should_preprocess)
@@ -161,7 +200,32 @@ def read_jsonl(jsonl_file, output_jsonl, number_of_ngrams, max_n_grams, should_p
     
     with open(output_jsonl, "w") as f:
         json.dump(profiles, f)
-        
+
+
+def classify(models_jsonl_file, example_jsonl_file, number_of_ngrams, max_n_grams, should_preprocess):
+    char_preprocessor = make_preprocess_f(should_preprocess)
+    
+    profiles = load_profiles_from_file(models_jsonl_file)
+    print(profiles[1]["tokens"].count)
+    
+    profile_code_constructor = {
+        "tokens": ProfileConstructor(max_n_grams, extract_number_ngrams),
+        "names": ProfileConstructor(max_n_grams, extract_char_ngrams, char_preprocessor),
+        "comments": ProfileConstructor(max_n_grams, extract_char_ngrams, char_preprocessor),
+    }
+    with open(example_jsonl_file, "rb") as f:
+        for line in f:
+            item = json.loads(line)
+            for k, v in profile_code_constructor.items():
+                v.add_sequence(item.get(k))
+                
+    profile_code = {k: v.bake_profile(number_of_ngrams).__dict__() for k, v in profile_code_constructor.items()}
+    
+    #compare
+    compare_and_return_class(profiles, profile_code)
+    
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -172,4 +236,5 @@ if __name__ == "__main__":
     parser.add_argument("-p", "--preprocess", type=bool)
     args = parser.parse_args()
 
-    read_jsonl(args.file, args.output, args.number, args.max, args.preprocess)
+    classify(args.file, args.output, args.number, args.max, args.preprocess)
+    #read_jsonl(args.file, args.output, args.number, args.max, args.preprocess)
