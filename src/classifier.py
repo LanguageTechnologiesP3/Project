@@ -2,58 +2,10 @@ import json
 import re
 import argparse
 from collections import defaultdict, OrderedDict
+from typing import Callable
 
 _RE_COMBINE_WHITESPACE = re.compile(r"\s+")
 _RE_REMOVE_NON_CHAR = re.compile(r"[^a-zA-Z'\s]")
-
-def read_jsonl(jsonl_file, output_jsonl, number_of_ngrams, max_n_grams, should_preprocces):
-    data = []
-    ngram_counts_tokens_human = defaultdict(int)
-    ngram_counts_names_human = defaultdict(int)
-    ngram_counts_comments_human = defaultdict(int)
-    ngram_counts_tokens = defaultdict(int)
-    ngram_counts_names = defaultdict(int)
-    ngram_counts_comments = defaultdict(int)
-    #jsonl_file = "C:/Project/src/res.jsonl"
-    #number_of_ngrams = 300
-    #max_n_grams = 5
-    #should_preprocces = False
-    
-    with open(jsonl_file, "rb") as f:
-        for line in f:
-            item = json.loads(line)
-            
-            tokens = item.get("tokens")
-            names = item.get("names")
-            comments = item.get("comments")
-            
-            names = preprocessing(names, should_preprocces)
-            comments = preprocessing(comments, should_preprocces)
-            
-            label = item.get("label")
-            if(label == 1):
-                for n in range(1,max_n_grams+1):
-                    extract_number_ngrams(tokens, ngram_counts_tokens, n)
-                    extract_char_ngrams(names, ngram_counts_names, n)
-                    extract_char_ngrams(comments, ngram_counts_comments, n)
-            else:
-                for n in range(1,max_n_grams+1):
-                    extract_number_ngrams(tokens, ngram_counts_tokens_human, n)
-                    extract_char_ngrams(names, ngram_counts_names_human, n)
-                    extract_char_ngrams(comments, ngram_counts_comments_human, n)
-            
-            
-    ngram_dict = {
-        "tokens_ai": sort_dict_by_value_and_return_n_most(ngram_counts_tokens, number_of_ngrams),
-        "names_ai": sort_dict_by_value_and_return_n_most(ngram_counts_names, number_of_ngrams),
-        "comments_ai": sort_dict_by_value_and_return_n_most(ngram_counts_comments, number_of_ngrams),
-        "tokens_human": sort_dict_by_value_and_return_n_most(ngram_counts_tokens_human, number_of_ngrams),
-        "names_human": sort_dict_by_value_and_return_n_most(ngram_counts_names_human, number_of_ngrams),
-        "comments_human": sort_dict_by_value_and_return_n_most(ngram_counts_comments_human, number_of_ngrams)
-    }
-    with open(output_jsonl, "w") as f:
-        json.dump(ngram_dict, f)
-
 
 def preprocessing(input_list, should_save_only_char):
     words = []
@@ -69,7 +21,12 @@ def preprocessing(input_list, should_save_only_char):
         else:
             words.append(item.strip())
     return words
-    
+
+def make_preprocess_f(should_save_only_char):
+    def f(input_list):
+        return preprocessing(input_list, should_save_only_char)
+    return f
+
 
 def extract_number_ngrams(input_list, input_dict, n):
     if n < 1 or not input_list:
@@ -84,8 +41,12 @@ def extract_number_ngrams(input_list, input_dict, n):
 
     for i in range(len(padded) - n + 1):
         ngram = tuple(padded[i:i + n])
-        input_dict[ngram] += 1
-        
+        if ngram in input_dict:
+            input_dict[ngram] += 1
+        else:
+            input_dict[ngram] = 1
+    
+
 def extract_char_ngrams(input_list, input_dict, n):
     if n < 1 or not input_list:
         return
@@ -97,12 +58,110 @@ def extract_char_ngrams(input_list, input_dict, n):
 
         for i in range(len(padded) - n + 1):
             ngram = ''.join(padded[i:i + n])
-            input_dict[ngram] += 1
-            
+            if ngram in input_dict:
+                input_dict[ngram] += 1
+            else:
+                input_dict[ngram] = 1
+        
 def sort_dict_by_value_and_return_n_most(input_dict, n=300):
     sorted_dict = OrderedDict(sorted(input_dict.items(), key=lambda item: item[1], reverse=True))
-    #return list(sorted_dict.keys())[:n]
-    return list(sorted_dict.items())[:n]
+    return list(sorted_dict.keys())[:n]
+            
+
+class Profile:
+    def __init__(self, data: dict, ngram_len, count):
+        self.data = data
+        self.ngram_len = ngram_len
+        self.count = count
+        
+    def __dict__(self):
+        data = {str(k): v for k, v in self.data.items()}
+        
+        return {
+            "ngram_len": self.ngram_len,
+            "data": data,
+            "count": self.count,
+        }
+    
+    def to_json(self):
+        return json.dumps(self.data)
+    
+    def compare_to(self, other):
+        greater = self.data if len(self.data) > len(other.data) else other.data
+        lesser = self.data if len(self.data) <= len(other.data) else other.data
+        
+        diff = 0
+        for k, v in lesser.items():
+           diff += abs(v - greater[k]) if k in greater else 1
+        
+        diff /= len(lesser)
+        return diff              
+        
+
+class ProfileConstructor:
+    def __init__(self, ngram_len, extractor_f: Callable[[list, dict, int], None], preprocess_f: Callable[[any], any] | None = None):
+        self.ngrams = {}
+        self.extractor_f = extractor_f
+        self.preprocess_f = preprocess_f
+        self.n = ngram_len
+        
+    def add_sequence(self, sequence):
+        if self.preprocess_f is not None:
+            sequence = self.preprocess_f(sequence)
+        for n in range(1, self.n + 1):
+            self.extractor_f(sequence, self.ngrams, n)
+
+    def bake_profile(self, n) -> Profile:
+        sorted_dict = OrderedDict(sorted(self.ngrams.items(), key=lambda item: item[1], reverse=True))
+        last_count = max(sorted_dict.values())
+        
+        ngram_count = 0
+        output = {}
+        rank = 0
+        cnt = 0
+        for k, v in sorted_dict.items():
+            ngram_count += 1
+            if v != last_count:
+                rank += 1
+                last_count = v
+            output[k] = rank
+            cnt += 1
+            if cnt >= n:
+                break
+        
+        output = {k: v / rank for k, v in output.items()}
+        return Profile(output, self.n, ngram_count)
+        
+    
+def read_jsonl(jsonl_file, output_jsonl, number_of_ngrams, max_n_grams, should_preprocess):  
+    char_preprocessor = make_preprocess_f(should_preprocess)
+    
+    profile_constructors = [
+        {
+            "tokens": ProfileConstructor(max_n_grams, extract_number_ngrams),
+            "names": ProfileConstructor(max_n_grams, extract_char_ngrams, char_preprocessor),
+            "comments": ProfileConstructor(max_n_grams, extract_char_ngrams, char_preprocessor),
+        },
+        {
+            "tokens": ProfileConstructor(max_n_grams, extract_number_ngrams),
+            "names": ProfileConstructor(max_n_grams, extract_char_ngrams, char_preprocessor),
+            "comments": ProfileConstructor(max_n_grams, extract_char_ngrams, char_preprocessor)
+        }
+    ]
+
+    with open(jsonl_file, "rb") as f:
+        for line in f:
+            item = json.loads(line)
+
+            label = item.get("label")
+            for k, v in profile_constructors[label].items():
+                v.add_sequence(item.get(k))
+
+    profiles = [{k: v.bake_profile(number_of_ngrams).__dict__() for k, v in constructors.items()} for constructors in profile_constructors]
+    
+    with open(output_jsonl, "w") as f:
+        json.dump(profiles, f)
+        
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
