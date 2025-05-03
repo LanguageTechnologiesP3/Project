@@ -29,17 +29,30 @@ def convert_json(json_str, code_tag="code"):
     reader = io.BytesIO(code.encode("utf-8"))
     tokens = tokenize.tokenize(reader.readline)
     tok_list = []
+    names = set()
+    comments = []
     for tok in tokens:
         tok_id = tok.exact_type
-        if tok_id == tokenize.NAME and keyword.iskeyword(tok.string):
-            tok_id = keyword.kwlist.index(tok.string) + 70
+        if tok_id == tokenize.NAME:
+            if keyword.iskeyword(tok.string):
+                tok_id = keyword.kwlist.index(tok.string) + 70
+            else:
+                names.add(tok.string)
         elif tok_id == tokenize.SOFT_KEYWORD and keyword.issoftkeyword(tok.string):
             tok_id = keyword.softkwlist.index(tok.string) + 70 + len(keyword.kwlist)
+        elif tok_id == tokenize.COMMENT:
+            comments.append(tok.string.removeprefix('#').strip())
+            
         tok_list.append(tok_id)
 
-    # del json_obj[code_tag]
-    json_obj["tokenized_code"] = tok_list
-    return json_obj
+    output = {
+        "label": json_obj["label"],
+        "tokens": tok_list,
+        "names": list(names),
+        "comments": comments,
+    }
+
+    return output
 
 
 if __name__ == "__main__":
