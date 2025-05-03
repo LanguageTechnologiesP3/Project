@@ -103,7 +103,8 @@ def extract_char_ngrams(input_list, input_dict, n):
             
 def sort_dict_by_value_and_return_n_most(input_dict, n=300):
     sorted_dict = OrderedDict(sorted(input_dict.items(), key=lambda item: item[1], reverse=True))
-    return list(sorted_dict.keys())[:n]
+    #return list(sorted_dict.keys())[:n]
+    return list(sorted_dict.items())[:n]
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
