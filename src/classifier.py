@@ -43,18 +43,16 @@ def read_jsonl(jsonl_file, output_jsonl, number_of_ngrams, max_n_grams, should_p
                     extract_char_ngrams(comments, ngram_counts_comments_human, n)
             
             
-    ngram_dicts = [
-        (sort_dict_by_value_and_return_n_most(ngram_counts_tokens, number_of_ngrams), "tokens_ai"),
-        (sort_dict_by_value_and_return_n_most(ngram_counts_names, number_of_ngrams), "names_ai"),
-        (sort_dict_by_value_and_return_n_most(ngram_counts_comments, number_of_ngrams), "comments_ai"),
-        (sort_dict_by_value_and_return_n_most(ngram_counts_tokens_human, number_of_ngrams), "tokens_human"),
-        (sort_dict_by_value_and_return_n_most(ngram_counts_names_human, number_of_ngrams), "names_human"),
-        (sort_dict_by_value_and_return_n_most(ngram_counts_comments_human, number_of_ngrams), "comments_human")
-    ]
+    ngram_dict = {
+        "tokens_ai": sort_dict_by_value_and_return_n_most(ngram_counts_tokens, number_of_ngrams),
+        "names_ai": sort_dict_by_value_and_return_n_most(ngram_counts_names, number_of_ngrams),
+        "comments_ai": sort_dict_by_value_and_return_n_most(ngram_counts_comments, number_of_ngrams),
+        "tokens_human": sort_dict_by_value_and_return_n_most(ngram_counts_tokens_human, number_of_ngrams),
+        "names_human": sort_dict_by_value_and_return_n_most(ngram_counts_names_human, number_of_ngrams),
+        "comments_human": sort_dict_by_value_and_return_n_most(ngram_counts_comments_human, number_of_ngrams)
+    }
     with open(output_jsonl, "w") as f:
-        for ngrams, category in ngram_dicts:
-            result = {category: ngrams}
-            f.write(json.dumps(result))
+        json.dump(ngram_dict, f)
 
 
 def preprocessing(input_list, should_save_only_char):
