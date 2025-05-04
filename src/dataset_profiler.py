@@ -4,46 +4,22 @@ import re
 import argparse
 from collections import defaultdict, OrderedDict
 from typing import Callable
-from ngram_profile import Profile, ProfileConstructor, extract_char_ngrams, extract_number_ngrams, make_preprocess_f
-from src.ngram_profile import make_preprocess_f, ProfileConstructor, extract_number_ngrams, extract_char_ngrams
+from ngram_profile import FullProfiler
 
 
-def read_jsonl(jsonl_file, output_jsonl, number_of_ngrams, max_n_grams, should_preprocess):  
-    char_preprocessor = make_preprocess_f(should_preprocess)
-    
-    profile_constructors = [
-        {
-            "tokens": ProfileConstructor(max_n_grams, extract_number_ngrams),
-            "names": ProfileConstructor(max_n_grams, extract_char_ngrams, char_preprocessor),
-            "comments": ProfileConstructor(max_n_grams, extract_char_ngrams, char_preprocessor),
-        },
-        {
-            "tokens": ProfileConstructor(max_n_grams, extract_number_ngrams),
-            "names": ProfileConstructor(max_n_grams, extract_char_ngrams, char_preprocessor),
-            "comments": ProfileConstructor(max_n_grams, extract_char_ngrams, char_preprocessor)
-        }
-    ]
+def read_jsonl(jsonl_file, output_jsonl, settings):  
+    profiler = FullProfiler(settings)
+    profiler.init_constructors()
 
     with open(jsonl_file, "rb") as f:
         for line in f:
             item = json.loads(line)
+            profiler.add_example(item)
 
-            label = item.get("label")
-            for k, v in profile_constructors[label].items():
-                v.add_sequence(item.get(k))
-
-    profiles = [{k: v.bake_profile(number_of_ngrams).__dict__() for k, v in constructors.items()} for constructors in profile_constructors]
+    profiler.bake_profiles()
     
     with open(output_jsonl, "w") as f:
-        
-        json.dump({
-            "settings": {
-                "max_ngrams": number_of_ngrams,
-                "ngram_len": max_n_grams,
-                "preprocess": should_preprocess
-            },
-            "profiles": profiles,
-        }, f)
+        f.write(profiler.to_json())
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -54,4 +30,19 @@ if __name__ == "__main__":
     parser.add_argument("-p", "--preprocess", type=bool)
     args = parser.parse_args()
 
-    read_jsonl(args.file, args.output, args.number, args.max, args.preprocess)
+    read_jsonl(args.file, args.output, {
+        "tokens":{
+            "ngram_len": args.max,
+            "max_ngrams": args.number
+        },
+        "names":{
+            "ngram_len": args.max,
+            "max_ngrams": args.number,
+            "preprocess": args.preprocess
+        },
+        "comments":{
+            "ngram_len": args.max,
+            "max_ngrams": args.number,
+            "preprocess": args.preprocess
+        }
+    })
