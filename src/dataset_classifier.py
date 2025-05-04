@@ -46,6 +46,7 @@ def classify(models_json, dataset_jsonl, output_jsonl):
                     
                 res = {
                     "label": label,
+                    "votes": {k: 0 if scores[0][k] <= scores[1][k] else 1 for k in constructors.keys()},
                     "scores": scores
                 }
                 
