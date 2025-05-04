@@ -1,5 +1,6 @@
 import random
 from typing import Callable
+from ngram_profile import FullProfiler
 
 
 def label_sort_data(data, label_tag='label'):
@@ -14,7 +15,7 @@ def split_dataset(dataset, ratios: dict[any, float]):
     random.shuffle(dataset)
     i = 0
     output = {}
-    for k, v in ratios.values():
+    for k, v in ratios.items():
         l = int(round(len(dataset) * v))
         output[l] = dataset[i: i + l]
         i += l
