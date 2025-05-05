@@ -1,5 +1,8 @@
 import random
 from typing import Callable
+#import sys
+#import os
+#sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 from ngram_profile import FullProfiler
 
 

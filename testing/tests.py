@@ -2,12 +2,11 @@ import test_utils as tu
 import DNN as dnn
 import json
 import numpy as np
-from ngram_profile import FullProfiler
 
 
-def train(dataset_jsonl, models_json, n_repeats = 1, train_validate_ratio = 0.75):
-    profilers = FullProfiler()
-    profilers.from_json(models_json)
+def train(dataset_jsonl, n_repeats = 1, train_validate_ratio = 0.75):
+    model =  dnn.build_DNN(input_file=dataset_jsonl, test_split=train_validate_ratio)
+    
     
     with open(dataset_jsonl, 'r') as dsf:
         dataset = [json.loads(l) for l in dsf]
@@ -24,7 +23,7 @@ def train(dataset_jsonl, models_json, n_repeats = 1, train_validate_ratio = 0.75
             sets[k] = tu.split_dataset(v, {'train': train_validate_ratio, 'validate': 1 - train_validate_ratio})
         
         # train
-        model =  dnn.build_DNN(profiler=profilers, labeled_sets=sets)
+        #model =  dnn.build_DNN(input_file=dataset_jsonl)
         
         
         # validate
@@ -33,7 +32,7 @@ def train(dataset_jsonl, models_json, n_repeats = 1, train_validate_ratio = 0.75
             
         
 def main():
-    train('tokenize.jsonl','models.jsonl')
+    train('./src/res.jsonl')
     
 
 if __name__ == '__main__':
