@@ -8,7 +8,8 @@ def import_profiling_results(file_path):
     with open(file_path) as f:
         for line in f:
             d = json.loads(line)
-            x.append([d[0]['tokens'], d[0]['names'], d[0]['comments'], d[1]['tokens'], d[1]['names'], d[1]['comments']])
+            s = d['scores']
+            x.append([s[0]['tokens'], s[0]['names'], s[0]['comments'], s[1]['tokens'], s[1]['names'], s[1]['comments']])
             y.append(d['label'])
     
     return np.array(x), np.array(y)
